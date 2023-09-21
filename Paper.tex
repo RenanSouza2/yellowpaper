@@ -64,7 +64,7 @@
 \newcommand*\ie{i.e.\@\xspace}
 %\renewcommand{\itemhook}{\setlength{\topsep}{0pt}  \setlength{\itemsep}{0pt}\setlength{\leftmargin}{15pt}}
 
-\title[Ethereum: A Secure Decentralised Generalised Transaction Ledger\\ \smaller \textbf{{Berlin version}}]{Ethereum: A Secure Decentralised Generalised Transaction Ledger \\ \smaller \textbf{{Berlin version \YellowPaperVersionNumber}}}
+\title[Ethereum: A Secure Decentralised Generalised Transaction Ledger\\ \smaller \textbf{{London version}}]{Ethereum: A Secure Decentralised Generalised Transaction Ledger \\ \smaller \textbf{{London version \YellowPaperVersionNumber}}}
 \author{
     Dr. Gavin Wood\\
     Founder, Ethereum \& Parity\\
@@ -171,7 +171,7 @@ This would mean that past a given point in time (block), multiple states of the 
 The scheme we use in order to generate consensus is a simplified version of the GHOST protocol introduced by \cite{cryptoeprint:2013:881}. This process is described in detail in section \ref{ch:ghost}.
 
 Sometimes, a path follows a new protocol from a particular height (block number).
-This document describes one version of the protocol, namely the \textit{Berlin} version defined by \cite{BeikoBerlin}.
+This document describes one version of the protocol, namely the \textit{London} version defined by \cite{BeikoLondon}.
 In order to follow back the history of a path, one must reference multiple versions of this document.
 Here are the block numbers of protocol updates on the Ethereum main network:
 \par
@@ -309,18 +309,27 @@ The sender of a transaction cannot be a contract.
 While it is assumed that the ultimate external actor will be human in nature, software tools will be used in its construction and dissemination\footnote{Notably,
 such `tools' could ultimately become so causally removed from their human-based initiation---or humans may become so causally-neutral---that there could be a point at which they rightly be considered autonomous agents.
 \eg contracts may offer bounties to humans for being sent transactions to initiate their execution.}.
-EIP-2718 by \cite{EIP-2718} introduced the notion of different transaction types.
-As of the Berlin version of the protocol, there are two transaction types: 0 (legacy) and 1 (EIP-2930 by \cite{EIP-2930}).
-Further, there are two subtypes of transactions: those which result in message calls and those which result in the creation of new accounts with associated code (known informally as `contract creation').
-All transaction types specify a number of common fields:
+EIP-2718 by \cite{EIP-2718} introduced the notion of different transaction types, formally $T_{\mathrm{x}}$.
+As of the London version of the protocol, there are tree transaction types: 0 (legacy), 1 (EIP-2930 by \cite{EIP-2930}) and 2 (EIP-1559 by \cite{EIP-1559}).
 
+Legacy transactions can be encoded either as
+\begin{eqnarray}
+&\textbf{Payload}& \\ 
+&\nonumber \text{or} \\
+&0 \cdot \textbf{Payload}&
+\end{eqnarray}
+and is the only that has $T_x$ optional
+
+It is formed by the fields:
 \begin{description}
-\item[type]\linkdest{tx_type}{} EIP-2718 transaction type; formally $T_{\mathrm{x}}$.
 \item[nonce]\linkdest{tx_nonce}{} A scalar value equal to the number of transactions sent by the sender; formally $T_{\mathrm{n}}$.
 \item[gasPrice]\linkdest{tx_gas_price_T__p}{} A scalar value equal to the number of Wei to be paid per unit of \textit{gas} for all computation costs incurred as a result of the execution of this transaction; formally $T_{\mathrm{p}}$.
 \item[gasLimit]\linkdest{tx_gas_limit_T__g}{} A scalar value equal to the maximum amount of gas that should be used in executing this transaction. This is paid up-front, before any computation is done and may not be increased later; formally $T_{\mathrm{g}}$.
 \item[to]\linkdest{tx_to_address_T__t}{} The 160-bit address of the message call's recipient or, for a contract creation transaction, $\varnothing$, used here to denote the only member of $\mathbb{B}_0$ ; formally $T_{\mathrm{t}}$.
 \item[value]\linkdest{tx_value_T__v}{} A scalar value equal to the number of Wei to be transferred to the message call's recipient or, in the case of contract creation, as an endowment to the newly created account; formally $T_{\mathrm{v}}$.
+\item[data] An unlimited size byte array specifying the input data of the message call, formally $\mathbf{p}$.
+\item[w]\linkdest{T__w}{} A scalar value encoding Y parity and possibly chain ID; formally $T_{\mathrm{w}}$.
+$T_{\mathrm{w}} = 27 + T_{\mathrm{y}}$ or $T_{\mathrm{w}} = 2\beta + 35 + T_{\mathrm{y}}$ (see EIP-155 by \cite{EIP-155}).
 \item[r, s]\linkdest{T__r_T__s}{} Values corresponding to the signature of the transaction and used to determine the sender of the transaction; formally {$T_{\mathrm{r}}$ and $T_{\mathrm{s}}$}. This is expanded in Appendix \ref{app:signing}.
 \end{description}
 
@@ -329,27 +338,25 @@ EIP-2930 (type 1) transactions also have:
 \item[accessList]\linkdest{tx_access_list}{} List of access entries to warm up; formally $T_{\mathbf{A}}$.
 \linkdest{access_list_entry}{}Each access list entry $E$ is a tuple of an account address and a list of storage keys: $E \equiv (E_{\mathrm{a}}, E_{\mathbf{s}})$. 
 \item[chainId]\linkdest{tx_chain_id}{} Chain ID; formally $T_{\mathrm{c}}$. Must be equal to the network chain ID \hyperlink{chain_id}{$\beta$}.
-\item[yParity]\linkdest{tx_y_parity}{} Signature Y parity; formally $T_{\mathrm{y}}$.
+\item[yParity]\linkdest{tx_y_parity}{} Signature Y parity; formally $T_{\mathrm{y}}$, this is included in $T_w$ of legacy transactions but here is also represented seperated.
 \end{description}
 
-Legacy transactions do not have an \textbf{accessList} ($T_{\mathbf{A}}=()$), while \textbf{chainId} and \textbf{yParity} for legacy transactions are combined into a single value:
+EIP-1559 (type 2) removes $gasPrice$ and replaces it with:
 \begin{description}
-\item[w]\linkdest{T__w}{} A scalar value encoding Y parity and possibly chain ID; formally $T_{\mathrm{w}}$.
-$T_{\mathrm{w}} = 27 + T_{\mathrm{y}}$ or $T_{\mathrm{w}} = 2\beta + 35 + T_{\mathrm{y}}$ (see EIP-155 by \cite{EIP-155}).
+\item[maxPriorityFeePerGas]\linkdest{tx_max_priority_fee_per_gas}{} TODO
+\item[maxFeePerGas]\linkdest{tx_max_fee_per_gas}{} TODO
 \end{description}
 
-Additionally, a contract creation transaction (regardless whether legacy or EIP-2930) contains:
+Further, there are two subtypes of transactions: those with a defined $T_t$ which result in message calls and those which result in the creation of new accounts with associated code (known informally as `contract creation'). 
 
-\begin{description}
-\item[init] An unlimited size byte array specifying the EVM-code for the account initialisation procedure, formally $T_{\mathbf{i}}$.
-\end{description}
-
-\textbf{init} is an EVM-code fragment; it returns the \textbf{body}, a second fragment of code that executes each time the account receives a message call (either through a transaction or due to the internal execution of code). \textbf{init} is executed only once at account creation and gets discarded immediately thereafter.
-
-In contrast, a message call transaction contains:
-
+For the first type it is defined:
 \begin{description}
 \item[data] An unlimited size byte array specifying the input data of the message call, formally $T_{\mathbf{d}}$.
+\end{description}
+
+For the second:
+\begin{description}
+\item[init] The code that sets up the a smart contract, formally $T_{\mathbf{i}}$.
 \end{description}
 
 Appendix \ref{app:signing} specifies the function, $S$, which maps transactions to the sender, and happens through the ECDSA of the SECP-256k1 curve, using the hash of the transaction (excepting the latter three signature fields) as the datum to sign. For the present we simply assert that the sender of a given transaction $T$ can be represented with $S(T)$.
@@ -358,13 +365,7 @@ Appendix \ref{app:signing} specifies the function, $S$, which maps transactions 
 \linkdest{L_transaction} L_{\mathrm{T}}(T) \equiv \begin{cases}
 (T_{\mathrm{n}}, T_{\mathrm{p}}, T_{\mathrm{g}}, T_{\mathrm{t}}, T_{\mathrm{v}}, \mathbf{p}, T_{\mathrm{w}}, T_{\mathrm{r}}, T_{\mathrm{s}}) & \text{if} \; T_{\mathrm{x}} = 0 \\
 (T_{\mathrm{c}}, T_{\mathrm{n}}, T_{\mathrm{p}}, T_{\mathrm{g}}, T_{\mathrm{t}}, T_{\mathrm{v}}, \mathbf{p}, T_{\mathbf{A}}, T_{\mathrm{y}}, T_{\mathrm{r}}, T_{\mathrm{s}}) & \text{if} \; T_{\mathrm{x}} = 1 \\
-\end{cases}
-\end{equation}
-where
-\begin{equation}
-\mathbf{p} \equiv \begin{cases}
-T_{\mathbf{i}} & \text{if}\ T_{\mathrm{t}} = \varnothing \\
-T_{\mathbf{d}} & \text{otherwise}
+(T_{\mathrm{c}}, T_{\mathrm{n}}, T_{\mathrm{p}}, T_{\mathrm{g}}, T_{\mathrm{t}}, T_{\mathrm{v}}, \mathbf{p}, T_{\mathbf{A}}, T_{\mathrm{y}}, T_{\mathrm{r}}, T_{\mathrm{s}}) & \text{if} \; T_{\mathrm{x}} = 2 TODO
 \end{cases}
 \end{equation}
 
@@ -1960,7 +1961,7 @@ G(T, p_{\mathrm{r}}) \equiv T \quad \text{except:} \\
 \linkdest{T__r}{T_{\mathrm{r}}} = \hyperlink{r}{r}\\
 \linkdest{T__s}{T_{\mathrm{s}}} = \hyperlink{s}{s}
 \end{eqnarray}
-and $\hyperlink{T__w}{T_{\mathrm{w}}}$ of legacy transcations is either $27 + T_{\mathrm{y}}$ or $2\hyperlink{chain_id}{\beta} + 35 + T_{\mathrm{y}}$.
+and $\hyperlink{T__w}{T_{\mathrm{w}}}$ of legacy transactions is either $27 + T_{\mathrm{y}}$ or $2\hyperlink{chain_id}{\beta} + 35 + T_{\mathrm{y}}$.
 
 We may then define the sender function $S$ of the transaction as:
 \begin{eqnarray}
